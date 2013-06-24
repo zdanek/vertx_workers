@@ -1,0 +1,108 @@
+apply plugin: 'groovy'
+apply plugin: 'idea'
+//apply plugin: "sonar"
+
+sourceCompatibility = 1.7
+
+def buildDir = 'build'
+def libDir = "${buildDir}/libs"
+def mainVerticle = "App.groovy"
+
+def vertx
+
+repositories {
+    mavenCentral()
+}
+
+configurations {
+    sonar
+}
+
+dependencies {
+    groovy group: 'org.codehaus.groovy', name: 'groovy-all', version: '2.1.0'
+    compile group: 'org.vert-x', name: 'vertx-platform', version: vertxVersion
+    compile group: 'org.vert-x', name: 'vertx-lang-java', version: vertxVersion
+    compile group: 'org.vert-x', name: 'vertx-lang-groovy', version: vertxVersion
+    runtime group: 'log4j', name: 'log4j', version: '1.2.15'
+
+    compile group: 'com.pi4j', name: 'pi4j-core', version: '0.0.5'
+
+
+    testCompile group: 'junit', name: 'junit', version: '4.11'
+    testCompile 'org.vert-x:vertx-junit-annotations:1.3.0.final'
+    testCompile 'org.mockito:mockito-all:1.9.5'
+    testCompile 'org.spockframework:spock-core:0.7-groovy-2.0'
+    testCompile 'cglib:cglib-nodep:2.2.2'
+
+//    sonar group: 'org.codehaus.sonar-plugins', name: 'sonar-ant-task', version: '2.0'
+}
+
+task runVertx(type:Exec, dependsOn: 'build') {
+    executable 'vertx'
+    args = ['run', "$mainVerticle", '-cp', "$libDir/*.jar"]
+}
+
+
+
+uploadArchives.doLast {
+    libDir = new File(libDir)
+
+    for(file in configurations.runtime) {
+        def fpath = file.absolutePath
+        if (true) {
+            println file
+
+            copy {
+                from file
+                into libDir
+            }
+        }
+    }
+}
+
+
+task sonarAnalyze << {
+
+    ant.properties['sonar.host.url'] = 'http://localhost:9000'
+    ant.properties['sonar.jdbc.url'] = "jdbc:h2:tcp://localhost:9092/sonar"
+    ant.properties['sonar.jdbc.username'] = "sonar"
+    ant.properties['sonar.jdbc.password'] = "sonar"
+    ant.properties['sonar.projectKey'] = 'buildMonitor' + ":" + 'buildMonitor'
+    ant.properties['sonar.projectName'] = 'buildMonitor'
+    ant.properties['sonar.projectVersion'] = '1.0'
+    ant.properties['sonar.sources'] = "src"
+    ant.properties['sonar.login'] = 'admin'
+    ant.properties['sonar.password'] = 'admin'
+
+    ant.taskdef(name: 'sonar', classname: 'org.sonar.ant.SonarTask', classpath: configurations.sonar.asPath)
+    ant.sonar()
+}
+
+task runSonar << {
+    ant.taskdef(name: "sonar", classname: "org.sonar.ant.SonarTask", classpath: configurations.sonarLibs.asPath)
+    ant.sonar(workdir: ".", key: "no.sample:sampleapp", version: '1.0') {
+        sources {
+            path(location: "src/main/groovy")
+        }
+        tests {
+            path(location: "src/test/groovy")
+        }
+        // tell sonar to use existing cobertura reports
+        property(key: "sonar.dynamicAnalysis", value: "reuseReports")
+        property(key: "sonar.cobertura.reportPath", value: file("build/test-results/coverage.xml"))
+    }
+}
+
+/*
+sonar {
+    server {
+        url = "http://localhost:9000"
+    }
+    database {
+        url = "jdbc:h2:tcp://localhost:9092/sonar"
+        driverClassName = "org.h2.Driver"
+        username = "sonar"
+        password = "sonar"
+    }
+}
+*/
